@@ -25,6 +25,7 @@
         <!-- END THEME GLOBAL STYLES -->
         <!-- BEGIN PAGE LEVEL STYLES -->
         <link href="/css/login.min.css" rel="stylesheet" type="text/css" />
+        <link href="/css/custom.css" rel="stylesheet" type="text/css" />
         <!-- END PAGE LEVEL STYLES -->
         <!-- BEGIN THEME LAYOUT STYLES -->
         <!-- END THEME LAYOUT STYLES -->
@@ -39,14 +40,8 @@
         </div>
         <!-- END LOGO -->
         <!-- BEGIN LOGIN -->
-         <?php echo $this->fetch('content'); ?>
-        
+         <?php echo $this->fetch('content'); ?>   
         <div class="copyright"> <?php echo date('Y');?> © Volcano Software Lab. </div>
-        <!--[if lt IE 9]>
-<script src="global/plugins/respond.min.js"></script>
-<script src="global/plugins/excanvas.min.js"></script> 
-<script src="global/plugins/ie8.fix.min.js"></script> 
-<![endif]-->
         <!-- BEGIN CORE PLUGINS -->
         <script src="/js/jquery.min.js" type="text/javascript"></script>
         <script src="/js/bootstrap.min.js" type="text/javascript"></script>
@@ -66,7 +61,7 @@
         <!-- BEGIN PAGE LEVEL SCRIPTS -->
         <script src="/js/login.min.js" type="text/javascript"></script>
         <!-- END PAGE LEVEL SCRIPTS -->
-        <!-- BEGIN THEME LAYOUT SCRIPTS -->
+        <script src="/js/custom.js" type="text/javascript"></script>
         <!-- END THEME LAYOUT SCRIPTS -->
         <script>
             $(document).ready(function()

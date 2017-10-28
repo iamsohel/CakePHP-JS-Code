@@ -5,15 +5,34 @@ use App\Controller\AppController;
 
 class UsersController extends AppController
 {
+    public function initialize() {
 
-    /**
-     * Login method
-     *
-     * @return \Cake\Http\Response|void
+        parent::initialize();
+        $this->Auth->allow('activate');
+        $this->Auth->allow('register');
+        $this->Auth->allow('forgotPassword');
+        $this->Auth->allow(['cpassword', 'changepasswordWithoutLogin', 'popupLogin', 'popupLoginSubmit', 'social', 'socialLogin']);
+    }
+
+     /**
+     * User login 
+     * @return type
      */
-    public function login()
-    {
-         $this->viewBuilder()->layout('user_login');
+    public function login() {
+        $this->viewBuilder()->layout('user_login');
+        if (!empty($this->request->data)) {
+            $user = $this->Auth->identify();
+            if ($user) {
+                $this->Auth->setUser($user);
+                $options = array('content_id' => $this->Auth->user('id'), 'user_id' => $this->Auth->user('id'), 'type' => 'login', 'action' => 'success');
+                $this->addNotification($options);
+                $this->redirect('/users');
+            } else {
+                $options = array('content_id' => '', 'user_id' => '', 'type' => 'login', 'action' => 'failure', 'message' => $this->request->data['email']);
+                $this->addNotification($options);
+                $this->Flash->error('Email or Password is incorrect');
+            }
+        }
     }
 
     /**
@@ -24,86 +43,216 @@ class UsersController extends AppController
         $this->viewBuilder()->layout('user_admin');
     }
 
-    /**
-     * View method
-     *
-     * @param string|null $id User id.
-     */
-    public function view($id = null)
-    {
-        $user = $this->Users->get($id, [
-            'contain' => ['Socials']
-        ]);
-
-        $this->set('user', $user);
-        $this->set('_serialize', ['user']);
-    }
-
-    /**
-     * Add method
-     *
-     * @return \Cake\Http\Response|null Redirects on successful add, renders view otherwise.
-     */
-    public function add()
-    {
-        $user = $this->Users->newEntity();
-        if ($this->request->is('post')) {
-            $user = $this->Users->patchEntity($user, $this->request->getData());
-            if ($this->Users->save($user)) {
-                $this->Flash->success(__('The user has been saved.'));
-
-                return $this->redirect(['action' => 'index']);
+    /** User accout activation after registration */
+    public function activate($activation_key) {
+        $this->viewBuilder()->layout(false);
+        $this->autoRender = false;
+        if (!empty($activation_key)) {
+            $check_user = $this->User->find()->where(['activation_key' => $activation_key])->first();
+            if (!empty($check_user)) {
+                // $this->User->id = $check_user['id'];
+                $check_user->status = 1;
+                $check_user->activation_key = '';
+                $this->User->save($check_user);
+                $this->Flash->success('Your account activated successfully');
+                $options = array('content_id' => $check_user['id'], 'user_id' => $check_user['id'], 'type' => 'register', 'action' => 'activate');
+                $this->addNotification($options);
+            } else {
+                $this->Flash->error('Invalid activation code');
             }
-            $this->Flash->error(__('The user could not be saved. Please, try again.'));
-        }
-        $socials = $this->Users->Socials->find('list', ['limit' => 200]);
-        $this->set(compact('user', 'socials'));
-        $this->set('_serialize', ['user']);
-    }
-
-    /**
-     * Edit method
-     *
-     * @param string|null $id User id.
-     * @return \Cake\Http\Response|null Redirects on successful edit, renders view otherwise.
-     * @throws \Cake\Network\Exception\NotFoundException When record not found.
-     */
-    public function edit($id = null)
-    {
-        $user = $this->Users->get($id, [
-            'contain' => []
-        ]);
-        if ($this->request->is(['patch', 'post', 'put'])) {
-            $user = $this->Users->patchEntity($user, $this->request->getData());
-            if ($this->Users->save($user)) {
-                $this->Flash->success(__('The user has been saved.'));
-
-                return $this->redirect(['action' => 'index']);
-            }
-            $this->Flash->error(__('The user could not be saved. Please, try again.'));
-        }
-        $socials = $this->Users->Socials->find('list', ['limit' => 200]);
-        $this->set(compact('user', 'socials'));
-        $this->set('_serialize', ['user']);
-    }
-
-    /**
-     * Delete method
-     *
-     * @param string|null $id User id.
-     * @return \Cake\Http\Response|null Redirects to index.
-     * @throws \Cake\Datasource\Exception\RecordNotFoundException When record not found.
-     */
-    public function delete($id = null)
-    {
-        $this->request->allowMethod(['post', 'delete']);
-        $user = $this->Users->get($id);
-        if ($this->Users->delete($user)) {
-            $this->Flash->success(__('The user has been deleted.'));
         } else {
-            $this->Flash->error(__('The user could not be deleted. Please, try again.'));
+            $this->Flash->error('Invalid activation code');
+        }
+        $this->redirect('/users/login');
+    }
+
+    /** User chang password after clicking from email  */
+    public function cpassword($activation_code = null) {
+         $this->viewBuilder()->layout('main_site');
+        if (!empty($activation_code)) {
+            $check_user = $this->User->find()->where(['activation_key' => $activation_code])->first();
+            if (empty($check_user)) {
+                $this->Flash->error('Invalid Activation Code');
+                $this->redirect('/users/login');
+            } else {
+                if (!empty($this->request->data)) {
+                    $check_user->password = (new \Cake\Auth\DefaultPasswordHasher)->hash($this->request->data['password']);
+                    $check_user->activation_key = '';
+                    if ($this->User->save($check_user)) {
+                        $this->Flash->success('Password Changed Successfully');
+                        $this->redirect('/users/login');
+                    }
+                }
+            }
+        } else {
+            $this->Flash->error('Invalid Activation Code');
         }
 
-        return $this->redirect(['action' => 'index']);
+
+        $this->set('activation_key', $activation_code);
+    }
+
+    /**
+     * change user profile image
+     * @param type $user_id
+     */
+    public function changeAvatar() {
+        $id = $this->Auth->user('id');
+        $this->add_model(array('User'));
+        if (!empty($this->request->data)) {
+            $image = $this->uploadImage('profile');
+            if (!empty($image)) {
+                $user = $this->User->get($id);
+                if (!empty($user['image'])) {
+                    unlink(getcwd() . DS . 'img' . DS . 'profile' . DS . $user['image']);
+                }
+                $user = $this->User->patchEntity($user, array('image' => $image));
+                if ($this->User->save($user)) {
+                    $options = array('content_id' => $this->Auth->user('id'), 'user_id' => $this->Auth->user('id'), 'type' => 'user', 'action' => 'change_avatar');
+                    $this->addNotification($options);
+                    $this->Flash->success(__('Profile image updated successfully.'));
+                }
+            }
+        }
+        $user = $this->User->get($id);
+        $this->set('user', $user);
+    }
+
+    /** User Forgot Password & send email to change password */
+    public function forgotPassword() {
+        $this->viewBuilder()->layout('user_login');
+        if (!empty($this->request->data)) {
+            $email = $this->request->data['email'];
+            if (!empty($email)) {
+                $user = $this->User->find()->where(['email' => $email])->first();
+                if (empty($user)) {
+                    $this->Flash->error(Configure::read('ErrorsCodes.7'));
+                } else {
+                    $activation = md5($this->randomnum(8));
+                    $params = array('activation_key' => $activation);
+                    $user->activation_key = $activation;
+                    if ($this->User->save($user)) {
+                        $options = array('template' => 'forgot_password', 'to' => $email, 'activation' => $activation, 'subject' => 'Forgot Password');
+                        $this->send_email($options);
+                        $this->Flash->success('Please check your email and change password.');
+                    }
+                }
+            }
+        }
+    }
+ 
+    /**
+     * User logout
+     */
+    public function logout() {
+        $this->viewBuilder()->layout(false);
+        $this->autoRender = false;
+        $options = array('content_id' => $this->Auth->user('id'), 'user_id' => $this->Auth->user('id'), 'type' => 'logout', 'action' => '');
+        $this->addNotification($options);
+        $this->Auth->logout();
+        $session = $this->request->session();
+        $session->destroy();
+
+        $this->redirect('/users');
+    }
+
+    /**
+     * Change User password
+     * @param type $id
+     */
+    public function password() {
+        $id = $this->Auth->user('id');
+        $this->add_model(array('User'));
+        if (!empty($this->request->data)) {
+            if (!empty($this->request->data['password'])) {
+                $user = $this->User->get($id);
+                $data['password'] = (new DefaultPasswordHasher)->hash($this->request->data['password']);
+                // if ($user['password'] != $data['password']) {
+                //     $this->Flash->aerror('Invalid Current Password');
+                //  } else {
+                $data['password'] = (new \Cake\Auth\DefaultPasswordHasher)->hash($this->request->data['npassword']);
+                $user = $this->User->patchEntity($user, $data);
+                if ($this->User->save($user)) {
+                    $options = array('content_id' => $this->Auth->user('id'), 'user_id' => $this->Auth->user('id'), 'type' => 'user', 'action' => 'change_password');
+                    $this->addNotification($options);
+                    $this->Flash->success(__('Password Changed successfully.'));
+                }
+                //   }
+            }
+        }
+        $user = $this->User->get($id);
+        $this->set('user', $user);
+    }
+
+    /**
+     * User Profile page
+     * @param type $id
+     */
+    public function profile() {
+        $this->add_model(array('Country'));
+        $user = $this->User->get($this->Session->read('Auth.User.id'));
+        if ($this->request->is(['patch', 'post', 'put'])) {
+            $update = false;
+            $query = $this->User->find()->where(['User.email LIKE "%' . $this->request->data['email'] . '%"']);
+            $checkEmail = $query->first()->toArray();
+            if (empty($checkEmail)) {
+                $update = true;
+            } elseif ($checkEmail['id'] == $user['id']) {
+                $update = true;
+            } else {
+                $update = false;
+            }
+            if ($update) {
+                $account = $this->User->patchEntity($user, $this->request->data);
+                if ($this->User->save($account)) {
+                    $this->Session->write('Auth.User.name', $account['name']);
+                    $this->Session->write('Auth.User.email', $account['email']);
+                    $options = array('content_id' => $this->Auth->user('id'), 'user_id' => $this->Auth->user('id'), 'type' => 'user', 'action' => 'change_profile');
+                    $this->addNotification($options);
+                    $this->Flash->success(__('Account data has been saved.'));
+                    $this->Session = $this->request->session();
+                    $this->set('session', $this->Session->read());
+                } else {
+                    $this->Flash->error(__('Account data could not be saved. Please, try again.'));
+                }
+            } else {
+                $this->Flash->error(__('Account data could not be saved. Please, try again.'));
+            }
+        }
+        $this->set('user', $user);
+        $countries = $this->Country->find('list')->toArray();
+        $this->set(compact('countries'));
+    }
+
+    /**     * User Registration Page  */
+    public function register() {
+        $this->viewBuilder()->layout('user_login');
+        if (!empty($this->request->data)) {
+            $params = $this->request->data;
+            if (!empty($params['email'])) {
+                $params['activation_key'] = md5($this->randomnum(8));
+                $params['status'] = 2;
+                $params['social_type'] ='normal';
+                $params['password'] = (new \Cake\Auth\DefaultPasswordHasher)->hash($params['password']);
+                $response = $this->User->addNewUser($params);
+                if ($response['status'] == 'error') {
+                    $response['codeMessage'] = Configure::read('ErrorsCodes.' . $response['code']);
+                    //$this->Flash->error($response['codeMessage']);
+                    $this->Flash->error(' Email already Exist');
+                } else {
+                    $options = array('template' => 'register', 'to' => $params['email'], 'activation' => $params['activation_key'], 'subject' => 'Registraion');
+                    $this->send_email($options);
+                    $this->Flash->success('Registration has been done successfully.Please check your email to activate your account.');
+                    $options = array('content_id' => $response['code'], 'user_id' => $response['code'], 'type' => 'register', 'action' => 'success');
+                    $this->addNotification($options);
+                    $this->set('success', 'success');
+                }
+            } else {
+                $this->Flash->aerror('Invalid or Wrong Email.');
+            }
+        }
+    }
+    function view(){
+
     }
 }
